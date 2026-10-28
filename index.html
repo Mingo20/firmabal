@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="es-DO">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0B1220">
+  <meta name="description" content="FirmAbal - Captura Territorial, Validación de Cédulas y Firmas Manuscritas PWA">
+  <title>FirmAbal - Captura Territorial</title>
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="icon-192.png">
+
+  <!-- External CDN Libraries -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Top Header Bar (Mobile) -->
+    <header class="top-header">
+      <div class="brand-container">
+        <div class="brand-icon-pill" id="brand-logo-slot"></div>
+        <span class="brand-title">FirmAbal</span>
+      </div>
+      <button class="icon-btn-square" id="btn-open-auto-registro" aria-label="Auto Registro / Compartir" title="Compartir Auto Registro">
+        <span id="header-share-icon-slot"></span>
+      </button>
+    </header>
+
+    <!-- Desktop Sidebar (>= 1024px) -->
+    <aside class="desktop-sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon-pill" id="sidebar-logo-slot"></div>
+        <span class="brand-title">FirmAbal</span>
+      </div>
+      <nav class="sidebar-nav">
+        <button class="sidebar-link active" data-target="inicio"><span class="sidebar-icon" data-icon="casa"></span> Inicio</button>
+        <button class="sidebar-link" data-target="registros"><span class="sidebar-icon" data-icon="usuarios"></span> Registros</button>
+        <button class="sidebar-link" data-target="captura"><span class="sidebar-icon" data-icon="camara"></span> Captura</button>
+        <button class="sidebar-link" data-target="firmas"><span class="sidebar-icon" data-icon="pluma"></span> Firmas</button>
+        <button class="sidebar-link" data-target="monitor"><span class="sidebar-icon" data-icon="mapa"></span> Monitor / Mapa</button>
+        <button class="sidebar-link" data-target="recolectores"><span class="sidebar-icon" data-icon="usuarioCheck"></span> Recolectores</button>
+        <button class="sidebar-link" data-target="auditoria"><span class="sidebar-icon" data-icon="auditoria"></span> Auditoría</button>
+        <button class="sidebar-link" data-target="exportacion"><span class="sidebar-icon" data-icon="descarga"></span> Exportación</button>
+        <button class="sidebar-link" data-target="configuracion"><span class="sidebar-icon" data-icon="engranaje"></span> Configuración</button>
+      </nav>
+      <div class="sidebar-user">
+        <div class="avatar-circle">J</div>
+        <div>
+          <div style="font-weight:700; font-size:14px; color:white;">Juan Pérez</div>
+          <div style="font-size:12px; color:#94A3B8;">Recolector Responsable</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Viewport Container for Screens -->
+    <main class="main-viewport">
+
+      <!-- ==================== 1. INICIO (CENTRO DE CONTROL) ==================== -->
+      <section id="screen-inicio" class="screen active">
+        <div class="screen-header">
+          <h1 class="screen-title">Centro de control</h1>
+          <p class="screen-subtitle">Resumen general de la captura territorial</p>
+        </div>
+
+        <!-- 2 Columns Metrics Grid -->
+        <div class="metrics-grid">
+          <div class="metric-card card-dark">
+            <span class="metric-label">REGISTROS TOTALES</span>
+            <span class="metric-value" id="metric-total">0</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">CAPTURADOS HOY</span>
+            <span class="metric-value" id="metric-hoy">0</span>
+          </div>
+          <div class="metric-card card-amber">
+            <span class="metric-label">PENDIENTES</span>
+            <span class="metric-value" id="metric-pendientes">0</span>
+          </div>
+          <div class="metric-card card-red">
+            <span class="metric-label">DUPLICADOS</span>
+            <span class="metric-value" id="metric-duplicados">0</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">AUTO REGISTROS</span>
+            <span class="metric-value" id="metric-auto">0</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">RECOLECTORES</span>
+            <span class="metric-value" id="metric-recolectores">0</span>
+          </div>
+        </div>
+
+        <!-- Meta Card -->
+        <div class="card">
+          <div class="meta-card-header">
+            <div class="meta-title-group">
+              <div class="meta-icon-box" id="meta-diana-slot"></div>
+              <div>
+                <div style="font-weight:800; font-size:16px;">Meta de Captura</div>
+                <div style="font-size:12px; color:var(--text-muted);">Objetivo territorial</div>
+              </div>
+            </div>
+            <div class="meta-input-group">
+              <input type="number" id="input-meta-val" class="meta-input" value="10" min="1" max="10000">
+              <button id="btn-save-meta" class="btn btn-primary btn-sm">Establecer</button>
+            </div>
+          </div>
+
+          <div class="progress-bar-bg">
+            <div id="meta-progress-fill" class="progress-bar-fill" style="width: 20%;"></div>
+          </div>
+          <div class="progress-text">
+            <span id="meta-progress-label">2 / 10 capturados</span>
+            <span id="meta-progress-percent">20%</span>
+          </div>
+        </div>
+
+        <!-- Bar Chart Card (Registros por día) -->
+        <div class="card">
+          <div style="font-weight:800; font-size:16px; margin-bottom:12px;">Registros por día (últimos 7 días)</div>
+          <div id="chart-container" style="width:100%; height:160px;"></div>
+        </div>
+      </section>
+
+      <!-- ==================== 2. CAPTURA (4 PASOS) ==================== -->
+      <section id="screen-captura" class="screen">
+        <div class="wizard-progress">
+          <div class="wizard-segments">
+            <div class="wizard-segment active" id="seg-1"></div>
+            <div class="wizard-segment" id="seg-2"></div>
+            <div class="wizard-segment" id="seg-3"></div>
+            <div class="wizard-segment" id="seg-4"></div>
+          </div>
+          <div class="wizard-step-label" id="wizard-step-title">Paso 1 de 4 · Configurar</div>
+        </div>
+
+        <!-- PASO 1: CONFIGURAR -->
+        <div id="captura-paso-1" class="captura-step-page">
+          <div class="card">
+            <div style="font-weight:800; font-size:16px; margin-bottom:8px;">Cómo realizar la captura – Pasos para un registro correcto</div>
+            <ol style="padding-left: 20px; font-size:13px; color:var(--text-muted); line-height:1.6;">
+              <li style="margin-bottom:6px;">Pida el número de WhatsApp del ciudadano.</li>
+              <li style="margin-bottom:6px;">Capture el frente y luego el reverso de la cédula, con buena iluminación.</li>
+              <li style="margin-bottom:6px;">Revise los datos extraídos automáticamente. Los campos verificados quedan bloqueados.</li>
+              <li>El ciudadano firma en pantalla y se guarda el registro.</li>
+            </ol>
+          </div>
+
+          <div class="card">
+            <div style="font-weight:800; font-size:16px; margin-bottom:4px;">WhatsApp del ciudadano</div>
+            <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">Número de contacto para futuras comunicaciones</div>
+            <div class="form-group">
+              <label class="form-label" for="input-cap-whatsapp">Número de WhatsApp *</label>
+              <input type="tel" id="input-cap-whatsapp" class="form-input" placeholder="809-000-0000" maxlength="12">
+            </div>
+            <button id="btn-paso-1-next" class="btn btn-primary" style="margin-top:8px;">
+              <span id="paso1-camara-slot"></span> Iniciar captura
+            </button>
+          </div>
+        </div>
+
+        <!-- PASO 2: CÉDULA & OCR -->
+        <div id="captura-paso-2" class="captura-step-page" style="display:none;">
+          <div class="card">
+            <div style="font-weight:800; font-size:16px; margin-bottom:12px;">Captura de Cédula de Identidad</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+              <div>
+                <label class="form-label">Frontal</label>
+                <div id="box-front-preview" style="width:100%; height:110px; background:#F8FAFC; border:1px dashed var(--border-strong); border-radius:12px; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:4px; overflow:hidden;">
+                  <span id="front-cam-icon-slot"></span>
+                  <span style="font-size:11px; color:var(--text-muted);">Foto Frontal</span>
+                </div>
+                <input type="file" id="file-front-cam" accept="image/*" capture="environment" style="display:none;">
+                <button id="btn-trigger-front" class="btn btn-outline btn-sm" style="width:100%; margin-top:6px;">Capturar Frente</button>
+              </div>
+              <div>
+                <label class="form-label">Trasera</label>
+                <div id="box-back-preview" style="width:100%; height:110px; background:#F8FAFC; border:1px dashed var(--border-strong); border-radius:12px; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:4px; overflow:hidden;">
+                  <span id="back-cam-icon-slot"></span>
+                  <span style="font-size:11px; color:var(--text-muted);">Foto Reverso</span>
+                </div>
+                <input type="file" id="file-back-cam" accept="image/*" capture="environment" style="display:none;">
+                <button id="btn-trigger-back" class="btn btn-outline btn-sm" style="width:100%; margin-top:6px;">Capturar Reverso</button>
+              </div>
+            </div>
+
+            <button id="btn-run-ocr" class="btn btn-outline btn-sm" style="width:100%; margin-bottom:12px;">
+              Procesar con OCR (Escanear datos)
+            </button>
+
+            <!-- Verification Form -->
+            <div style="font-weight:800; font-size:15px; margin-top:16px; margin-bottom:10px;">Revise los datos extraídos</div>
+
+            <div class="form-group">
+              <label class="form-label" for="input-cap-cedula">Cédula de Identidad *</label>
+              <div style="position:relative;">
+                <input type="text" id="input-cap-cedula" class="form-input" placeholder="000-0000000-0" maxlength="13">
+                <span id="cedula-lock-icon" style="position:absolute; right:12px; top:12px; color:var(--text-muted); display:none;"></span>
+              </div>
+              <div id="cedula-validation-msg" style="font-size:12px; margin-top:4px;"></div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="input-cap-nombre">Nombres y Apellidos *</label>
+              <input type="text" id="input-cap-nombre" class="form-input" placeholder="Nombre completo del ciudadano">
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+              <div class="form-group">
+                <label class="form-label" for="input-cap-fNac">Fecha de Nacimiento</label>
+                <input type="text" id="input-cap-fNac" class="form-input" placeholder="DD/MM/AAAA">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="select-cap-sexo">Sexo</label>
+                <select id="select-cap-sexo" class="form-select">
+                  <option value="Masculino">Masculino</option>
+                  <option value="Femenino">Femenino</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+              <button id="btn-corregir-manual" class="btn btn-outline btn-sm" style="width:auto;">Corregir manualmente</button>
+              <button id="btn-paso-2-next" class="btn btn-primary btn-sm" style="width:auto;">Continuar a Firma</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- PASO 3: FIRMA -->
+        <div id="captura-paso-3" class="captura-step-page" style="display:none;">
+          <div class="card">
+            <div style="font-weight:800; font-size:16px; margin-bottom:4px;">Firma Manuscrita</div>
+            <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">Por favor, pida al ciudadano que firme con el dedo en la caja</div>
+
+            <div class="signature-box">
+              <canvas id="canvas-signature" class="signature-canvas"></canvas>
+            </div>
+
+            <div class="signature-controls">
+              <button id="btn-sig-clear" class="btn btn-outline btn-sm" style="flex:1;">
+                <span id="sig-eraser-slot"></span> Limpiar
+              </button>
+              <button id="btn-sig-undo" class="btn btn-outline btn-sm" style="flex:1;">
+                <span id="sig-undo-slot"></span> Deshacer
+              </button>
+            </div>
+
+            <button id="btn-paso-3-next" class="btn btn-primary" style="margin-top:16px;">
+              Confirmar Firma
+            </button>
+          </div>
+        </div>
+
+        <!-- PASO 4: CONFIRMAR -->
+        <div id="captura-paso-4" class="captura-step-page" style="display:none;">
+          <div class="card">
+            <div style="font-weight:800; font-size:16px; margin-bottom:12px;">Resumen del Registro</div>
+
+            <div class="detail-row">
+              <div class="detail-label">CÉDULA DE IDENTIDAD</div>
+              <div class="detail-val" id="summary-cedula">—</div>
+            </div>
+            <div class="detail-row">
+              <div class="detail-label">NOMBRE COMPLETO</div>
+              <div class="detail-val" id="summary-nombre">—</div>
+            </div>
+            <div class="detail-row">
+              <div class="detail-label">WHATSAPP</div>
+              <div class="detail-val" id="summary-whatsapp">—</div>
+            </div>
+
+            <div class="form-group" style="margin-top:16px;">
+              <label class="form-label" for="select-cap-tipo">Tipo de Registro *</label>
+              <select id="select-cap-tipo" class="form-select">
+                <option value="Afiliado">Afiliado</option>
+                <option value="Promotor">Promotor</option>
+                <option value="Simpatizante">Simpatizante</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="select-cap-municipio">Municipio</label>
+              <select id="select-cap-municipio" class="form-select">
+                <option value="Santo Domingo Oeste">Santo Domingo Oeste</option>
+                <option value="Santo Domingo Este">Santo Domingo Este</option>
+                <option value="Santo Domingo Norte">Santo Domingo Norte</option>
+                <option value="Distrito Nacional">Distrito Nacional</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="input-cap-sector">Sector / Barrio</label>
+              <input type="text" id="input-cap-sector" class="form-input" value="Hato Nuevo">
+            </div>
+
+            <button id="btn-save-final-registro" class="btn btn-primary" style="margin-top:16px;">
+              Guardar Registro
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== 3. REGISTROS ==================== -->
+      <section id="screen-registros" class="screen">
+        <div class="screen-header">
+          <h1 class="screen-title">Registros</h1>
+          <p class="screen-subtitle">Listado de ciudadanos capturados en el padrón</p>
+        </div>
+
+        <div class="card" style="padding:14px;">
+          <div style="display:flex; gap:8px; margin-bottom:10px;">
+            <input type="text" id="search-registros" class="form-input" placeholder="Buscar por nombre, cédula..." style="min-height:40px;">
+          </div>
+          <div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px;">
+            <button class="chip chip-gray filter-chip active" data-filter-status="Todos">Todos</button>
+            <button class="chip chip-validado filter-chip" data-filter-status="Validado">Validado</button>
+            <button class="chip chip-pendiente filter-chip" data-filter-status="Pendiente">Pendiente</button>
+            <button class="chip chip-duplicado filter-chip" data-filter-status="Duplicado">Duplicado</button>
+          </div>
+        </div>
+
+        <div id="list-registros-container">
+          <!-- Rendered dynamically -->
+        </div>
+      </section>
+
+      <!-- ==================== 4. FIRMAS ==================== -->
+      <section id="screen-firmas" class="screen">
+        <div class="screen-header">
+          <h1 class="screen-title">Firmas</h1>
+          <p class="screen-subtitle" id="firmas-subtitle">0 firmas registradas · toque una tarjeta para ver el detalle y descargar el PDF</p>
+        </div>
+
+        <div id="firmas-grid-container" class="firmas-grid">
+          <!-- Rendered dynamically -->
+        </div>
+      </section>
+
+      <!-- ==================== 5. MONITOR / TERRITORIOS ==================== -->
+      <section id="screen-monitor" class="screen">
+        <div class="screen-header">
+          <h1 class="screen-title">Monitor territorial</h1>
+          <p class="screen-subtitle">Mapa en vivo y clasificación de territorio</p>
+        </div>
+
+        <!-- Map Container -->
+        <div id="map-box" class="map-container-box"></div>
+
+        <!-- Carousel -->
+        <div class="horizontal-carousel">
+          <div class="carousel-card">
+            <div style="font-size:11px; font-weight:700; color:var(--text-muted);">RECOLECTORES ACTIVOS</div>
+            <div style="font-size:24px; font-weight:800; margin-top:4px;" id="map-stat-rec">1</div>
+          </div>
+          <div class="carousel-card">
+            <div style="font-size:11px; font-weight:700; color:var(--text-muted);">UBICACIÓN EN VIVO</div>
+            <div style="font-size:24px; font-weight:800; color:var(--color-green); margin-top:4px;" id="map-stat-live">Activa</div>
+          </div>
+          <div class="carousel-card">
+            <div style="font-size:11px; font-weight:700; color:var(--text-muted);">REGISTROS EN MAPA</div>
+            <div style="font-size:24px; font-weight:800; margin-top:4px;" id="map-stat-padr">0</div>
+          </div>
+        </div>
+
+        <!-- Territorio Selectors Card -->
+        <div class="card">
+          <div style="font-weight:800; font-size:16px; margin-bottom:6px;">Clasificación Territorial</div>
+          <p style="font-size:11px; color:var(--text-muted); margin-bottom:12px;">Catálogo territorial editable. Debe cargarse con los datos oficiales de la JCE.</p>
+
+          <div class="form-group">
+            <label class="form-label">Municipio</label>
+            <select id="terr-select-municipio" class="form-select">
+              <option value="Santo Domingo Oeste">Santo Domingo Oeste</option>
+              <option value="Santo Domingo Este">Santo Domingo Este</option>
+              <option value="Distrito Nacional">Distrito Nacional</option>
+              <option value="Santo Domingo Norte">Santo Domingo Norte</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Distrito Municipal</label>
+            <select id="terr-select-distrito" class="form-select">
+              <option value="N/A">N/A (Municipio Cabecera)</option>
+              <option value="San Luis">San Luis</option>
+              <option value="La Victoria">La Victoria</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Sector</label>
+            <select id="terr-select-sector" class="form-select">
+              <option value="Hato Nuevo">Hato Nuevo</option>
+              <option value="Los Mina">Los Mina</option>
+              <option value="Bella Vista">Bella Vista</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Circunscripción</label>
+            <select id="terr-select-circ" class="form-select">
+              <option value="Circunscripción 4">Circunscripción 4</option>
+              <option value="Circunscripción 2">Circunscripción 2</option>
+              <option value="Circunscripción 1">Circunscripción 1</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== 6. RECOLECTORES ==================== -->
+      <section id="screen-recolectores" class="screen">
+        <div class="screen-header">
+          <h1 class="screen-title">Recolectores</h1>
+          <p class="screen-subtitle">Gestión de equipo territorial y rendimiento</p>
+        </div>
+
+        <div id="list-recolectores-container">
+          <!-- Rendered dynamically -->
+        </div>
+      </section>
+
+      <!-- ==================== 7. AUDITORÍA ==================== -->
+      <section id="screen-auditoria" class="screen">
+        <div class="screen-header">
+          <h1 class="screen-title">Auditoría e Integridad</h1>
+          <p class="screen-subtitle">Registro inmutable con cadena de hash SHA-256</p>
+        </div>
+
+        <div class="card" style="background:#F8FAFC;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <div style="font-weight:800; font-size:15px;">Control de Calidad y Criptografía</div>
+            <button id="btn-verify-audit" class="btn btn-primary btn-sm">Verificar integridad</button>
+          </div>
+          <div id="audit-status-badge" style="font-size:13px; font-weight:600; color:var(--color-green);">
+            Cadena de hashes SHA-256 inmutable verificada.
+          </div>
+        </div>
+
+        <div id="audit-log-container">
+          <!-- Rendered dynamically -->
+        </div>
+      </section>
+
+      <!-- ==================== 8. EXPORTACIÓN ==================== -->
+      <section id="screen-exportacion" class="screen">
+        <div class="screen-header">
+          <h1 class="screen-title">Exportación de datos</h1>
+          <p class="screen-subtitle">Descarga de expedientes PDF, paquetes ZIP y CSV</p>
+        </div>
+
+        <div class="card">
+          <div style="font-weight:800; font-size:16px; margin-bottom:12px;">Exportar Padrón Completo</div>
+          <button id="btn-export-csv" class="btn btn-primary" style="margin-bottom:10px;">
+            <span id="exp-csv-icon"></span> Descargar CSV / Excel (Padrón)
+          </button>
+          <button id="btn-export-zip-pdf" class="btn btn-outline">
+            <span id="exp-zip-icon"></span> Descargar paquete ZIP de PDFs
+          </button>
+        </div>
+      </section>
+
+      <!-- ==================== 9. CONFIGURACIÓN ==================== -->
+      <section id="screen-configuracion" class="screen">
+        <div class="screen-header">
+          <h1 class="screen-title">Configuración</h1>
+          <p class="screen-subtitle">Ajustes generales de la aplicación</p>
+        </div>
+
+        <div class="card">
+          <div class="form-group">
+            <label class="form-label" for="cfg-org-nombre">Nombre de la Organización / Partido *</label>
+            <input type="text" id="cfg-org-nombre" class="form-input" value="Organización Política">
+            <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">Aparece como responsable en el consentimiento de protección de datos y en los PDFs.</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="cfg-meta-input">Meta General de Captura</label>
+            <input type="number" id="cfg-meta-input" class="form-input" value="10">
+          </div>
+
+          <div class="form-group" style="display:flex; align-items:center; justify-content:space-between; margin-top:12px;">
+            <div>
+              <div style="font-weight:700; font-size:14px;">Conservar imágenes de cédula</div>
+              <div style="font-size:11px; color:var(--text-muted);">Desactivado por defecto para protección de datos.</div>
+            </div>
+            <input type="checkbox" id="cfg-conservar-fotos" style="width:20px; height:20px;">
+          </div>
+
+          <button id="btn-save-config" class="btn btn-primary" style="margin-top:16px;">Guardar Ajustes</button>
+        </div>
+
+        <div class="card">
+          <div style="font-weight:800; font-size:16px; margin-bottom:12px;">Mantenimiento y Datos Demo</div>
+          <button id="btn-delete-demo-data" class="btn btn-outline" style="margin-bottom:10px;">Borrar datos de demostración</button>
+          <button id="btn-wipe-all" class="btn btn-danger">Borrar todo y restablecer</button>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Bottom Navigation Bar (Mobile) -->
+    <nav class="bottom-nav">
+      <button class="nav-item active" data-target="inicio">
+        <span class="nav-icon" data-icon="casa"></span>
+        <span>Inicio</span>
+      </button>
+      <button class="nav-item" data-target="registros">
+        <span class="nav-icon" data-icon="usuarios"></span>
+        <span>Registros</span>
+      </button>
+      <button class="nav-item-capture" id="btn-nav-captura" data-target="captura" aria-label="Captura">
+        <div class="capture-btn-inner" id="nav-camera-slot"></div>
+      </button>
+      <button class="nav-item" data-target="firmas">
+        <span class="nav-icon" data-icon="pluma"></span>
+        <span>Firmas</span>
+      </button>
+      <button class="nav-item" id="btn-open-menu-sheet">
+        <span class="nav-icon" data-icon="cuadricula"></span>
+        <span>Menú</span>
+      </button>
+    </nav>
+
+    <!-- ==================== BOTTOM SHEETS (MODALS) ==================== -->
+
+    <!-- Sheet 1: Menu Grid Sheet -->
+    <div id="modal-backdrop-menu" class="modal-backdrop">
+      <div class="bottom-sheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-header">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span id="sheet-menu-logo-slot"></span>
+            <span class="sheet-title">FirmAbal</span>
+          </div>
+          <button class="close-btn btn-close-sheet"><span data-icon="cerrar"></span></button>
+        </div>
+        <div class="menu-grid">
+          <button class="menu-card-btn sheet-nav-btn" data-target="inicio">
+            <div class="menu-icon-pill"><span data-icon="casa"></span></div>
+            <span class="menu-btn-label">Inicio</span>
+          </button>
+          <button class="menu-card-btn sheet-nav-btn" data-target="registros">
+            <div class="menu-icon-pill"><span data-icon="usuarios"></span></div>
+            <span class="menu-btn-label">Registros</span>
+          </button>
+          <button class="menu-card-btn sheet-nav-btn" data-target="captura">
+            <div class="menu-icon-pill"><span data-icon="camara"></span></div>
+            <span class="menu-btn-label">Captura</span>
+          </button>
+          <button class="menu-card-btn sheet-nav-btn" data-target="monitor">
+            <div class="menu-icon-pill"><span data-icon="monitor"></span></div>
+            <span class="menu-btn-label">Monitor</span>
+          </button>
+          <button class="menu-card-btn sheet-nav-btn" data-target="monitor">
+            <div class="menu-icon-pill"><span data-icon="mapa"></span></div>
+            <span class="menu-btn-label">Territorios</span>
+          </button>
+          <button class="menu-card-btn sheet-nav-btn" data-target="recolectores">
+            <div class="menu-icon-pill"><span data-icon="usuarioCheck"></span></div>
+            <span class="menu-btn-label">Recolectores</span>
+          </button>
+          <button class="menu-card-btn sheet-nav-btn" data-target="firmas">
+            <div class="menu-icon-pill"><span data-icon="pluma"></span></div>
+            <span class="menu-btn-label">Firmas</span>
+          </button>
+          <button class="menu-card-btn sheet-nav-btn" data-target="auditoria">
+            <div class="menu-icon-pill"><span data-icon="auditoria"></span></div>
+            <span class="menu-btn-label">Auditoría</span>
+          </button>
+          <button class="menu-card-btn sheet-nav-btn" data-target="exportacion">
+            <div class="menu-icon-pill"><span data-icon="descarga"></span></div>
+            <span class="menu-btn-label">Exportación</span>
+          </button>
+          <button class="menu-card-btn sheet-nav-btn" data-target="configuracion">
+            <div class="menu-icon-pill"><span data-icon="engranaje"></span></div>
+            <span class="menu-btn-label">Configuración</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sheet 2: Auto Registro Share Sheet -->
+    <div id="modal-backdrop-auto" class="modal-backdrop">
+      <div class="bottom-sheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-header">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div style="width:36px; height:36px; background:#0B1220; color:white; border-radius:10px; display:flex; align-items:center; justify-content:center;" id="auto-share-icon-slot"></div>
+            <span class="sheet-title">Auto registro</span>
+          </div>
+          <button class="close-btn btn-close-sheet"><span data-icon="cerrar"></span></button>
+        </div>
+
+        <p style="font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:16px;">
+          Comparte para que el ciudadano se registre solo
+        </p>
+
+        <button id="btn-share-wa" class="btn btn-green" style="margin-bottom:10px;">
+          <span id="wa-icon-slot"></span> WhatsApp
+        </button>
+
+        <button id="btn-copy-auto-link" class="btn btn-primary" style="margin-bottom:14px;">
+          <span id="copy-icon-slot"></span> Copiar enlace
+        </button>
+
+        <p style="font-size:12px; color:var(--text-muted); line-height:1.5; background:#F8FAFC; padding:12px; border-radius:12px;">
+          El enlace queda asociado a usted como recolector responsable.
+        </p>
+      </div>
+    </div>
+
+    <!-- Sheet 3: Protección de Datos Consentimiento Sheet -->
+    <div id="modal-backdrop-consentimiento" class="modal-backdrop">
+      <div class="bottom-sheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-header">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span id="consent-shield-slot"></span>
+            <span class="sheet-title">Protección de datos</span>
+          </div>
+          <button class="close-btn btn-close-sheet"><span data-icon="cerrar"></span></button>
+        </div>
+
+        <p style="font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:10px;">
+          Consentimiento del ciudadano
+        </p>
+        <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">
+          Antes de continuar, es importante que el ciudadano conozca cómo se tratarán sus datos:
+        </p>
+
+        <ul style="padding-left:18px; font-size:12px; color:var(--text-primary); line-height:1.6; margin-bottom:14px;">
+          <li>Se capturarán datos de identidad (nombre, cédula, fecha de nacimiento, sexo y lugar de nacimiento).</li>
+          <li>Se capturará una firma manuscrita como respaldo del registro.</li>
+          <li>Los datos se utilizarán únicamente para los fines del proceso de afiliación del partido.</li>
+          <li>Las imágenes de la cédula se usan solo para la extracción de datos y no se almacenan permanentemente.</li>
+          <li>El responsable del tratamiento es <strong id="consent-org-name">Organización Política</strong>.</li>
+          <li>El ciudadano puede ejercer sus derechos de acceso, rectificación y oposición.</li>
+        </ul>
+
+        <div style="background:#F8FAFC; padding:10px; border-radius:10px; font-size:11px; color:var(--text-muted); margin-bottom:16px;">
+          No se garantiza una protección absoluta, pero se aplican medidas técnicas razonables para resguardar la información, conforme a la legislación dominicana aplicable sobre protección de datos personales.
+        </div>
+
+        <div style="display:flex; align-items:flex-start; gap:10px; margin-bottom:20px;">
+          <input type="checkbox" id="chk-consent-accept" style="width:20px; height:20px; margin-top:2px;">
+          <label for="chk-consent-accept" style="font-size:12px; font-weight:600; color:var(--text-primary); cursor:pointer;">
+            El ciudadano ha leído y acepta el tratamiento de sus datos personales según lo descrito.
+          </label>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <button id="btn-consent-decline" class="btn btn-outline">No aceptar</button>
+          <button id="btn-consent-accept" class="btn btn-primary">Aceptar y continuar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sheet 4: Detalle de Registro Sheet -->
+    <div id="modal-backdrop-registro-detail" class="modal-backdrop">
+      <div class="bottom-sheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-header">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div class="avatar-circle">C</div>
+            <div>
+              <div class="sheet-title" id="det-reg-nombre" style="font-size:18px;">CARMEN CHALAS MENA</div>
+              <div style="display:flex; gap:6px; margin-top:4px;">
+                <span class="chip chip-gray" id="det-reg-tipo">Promotor</span>
+                <span class="chip chip-validado" id="det-reg-estado">Validado</span>
+              </div>
+            </div>
+          </div>
+          <button class="close-btn btn-close-sheet"><span data-icon="cerrar"></span></button>
+        </div>
+
+        <div id="det-reg-rows-container">
+          <!-- Dynamically filled -->
+        </div>
+
+        <div style="margin-top:20px; display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <button id="btn-det-download-pdf" class="btn btn-primary">
+            <span data-icon="descarga"></span> Descargar PDF
+          </button>
+          <button id="btn-det-delete" class="btn btn-danger">
+            <span data-icon="trash"></span> Eliminar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sheet 5: Detalle de Firma Sheet -->
+    <div id="modal-backdrop-firma-detail" class="modal-backdrop">
+      <div class="bottom-sheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-header">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div class="avatar-circle" style="width:36px; height:36px; font-size:14px;">F</div>
+            <div>
+              <div class="sheet-title" id="det-firma-nombre" style="font-size:16px;">FIRMA DE CIUDADANO</div>
+              <div style="font-size:12px; color:var(--text-muted);" id="det-firma-cedula">224-0009987-9</div>
+            </div>
+          </div>
+          <button class="close-btn btn-close-sheet"><span data-icon="cerrar"></span></button>
+        </div>
+
+        <div style="font-size:11px; font-weight:800; color:var(--text-secondary); margin-bottom:6px;">FIRMA MANUSCRITA</div>
+        <div style="width:100%; height:140px; background:#F8FAFC; border-radius:16px; display:flex; align-items:center; justify-content:center; padding:10px; margin-bottom:14px; border:1px solid var(--border-subtle);">
+          <img id="det-firma-img-preview" src="" alt="Firma" style="max-width:100%; max-height:100%; object-fit:contain;">
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;">
+          <div>
+            <div style="font-size:11px; font-weight:800; color:var(--text-secondary); margin-bottom:4px;">FRONTAL</div>
+            <div id="det-firma-front-box" style="width:100%; height:70px; background:#F8FAFC; border-radius:10px; border:1px solid var(--border-subtle); display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--text-muted);">
+              No disponible
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px; font-weight:800; color:var(--text-secondary); margin-bottom:4px;">TRASERA</div>
+            <div id="det-firma-back-box" style="width:100%; height:70px; background:#F8FAFC; border-radius:10px; border:1px solid var(--border-subtle); display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--text-muted);">
+              No disponible
+            </div>
+          </div>
+        </div>
+
+        <button id="btn-firma-download-pdf" class="btn btn-primary" style="width:100%;">
+          <span data-icon="descarga"></span> Descargar PDF
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- JavaScript Modules -->
+  <script src="js/icons.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/audit.js"></script>
+  <script src="js/ocr.js"></script>
+  <script src="js/pdf.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
